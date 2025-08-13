@@ -5,7 +5,9 @@ export default {
   content: [
     "./index.html",
     "./src/App.jsx",
-    "./src/components/**"
+    "./src/components/**",
+    "./src/pages/**",
+    "./src/pages/AboutPage.jsx"
   ],
   darkMode: "class",
   theme: {

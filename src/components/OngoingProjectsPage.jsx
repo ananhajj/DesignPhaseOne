@@ -1,18 +1,21 @@
-import React, { useState, useMemo, useEffect } from "react";
+// src/pages/OngoingProjectsPage.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import {
     Search,
     Filter,
     MapPin,
     Building,
     Calendar,
-    Users,
     Eye,
-    X,
     ArrowUpDown,
+    X,
+    Layers,
 } from "lucide-react";
+import { Link as RouterLink } from "react-router-dom";
+import { projects } from "../data/projects";
 
 /**
- * توقع بنية المشروع:
+ * توقّع شكل كائن المشروع:
  * {
  *   id, name, location, city, status, coverImage,
  *   unitTypes: string[], completionDate: string,
@@ -20,41 +23,34 @@ import {
  *   priceRange: { min: number, max: number }
  * }
  *
- * ملاحظات:
- * - onViewProject(id) يُستدعى عند الضغط على زر "View Units".
- * - يدعم حالات حالة المشروع المختلفة: completed/ready, ongoing/under construction, upcoming/future ...
+ * props:
+ * - projects: Array<Project>
+ * - onViewProject?: (id) => void  // بديل للراوتر إن رغبت
  */
 
-// ألوان البراند
 const BRAND_GRAD = "bg-gradient-to-r from-[#7c533a] to-[#eab308]";
 
-// توحيد مسمّيات الحالات (لو عندك تنوّع بالتسمية)
 const normalizeStatus = (raw = "") => {
-    const s = String(raw).toLowerCase().trim();
-    if (["completed", "ready", "delivered", "done"].some((k) => s.includes(k)))
-        return "Completed";
+    const s = String(raw).toLowerCase();
     if (
-        [
-            "ongoing",
-            "under construction",
-            "in progress",
-            "construction",
-            "building",
-        ].some((k) => s.includes(k))
+        ["under construction", "ongoing", "in progress", "construction"].some((k) =>
+            s.includes(k)
+        )
     )
         return "In Progress";
-    if (["upcoming", "future", "planned", "soon"].some((k) => s.includes(k)))
+    if (["ready", "completed", "delivered", "done"].some((k) => s.includes(k)))
+        return "Completed";
+    if (["upcoming", "future", "planned"].some((k) => s.includes(k)))
         return "Upcoming";
     return "Other";
 };
 
-// ألوان شارات الحالة
 const statusChip = (status) => {
     switch (status) {
-        case "Completed":
-            return "bg-emerald-100 text-emerald-800 border border-emerald-200";
         case "In Progress":
             return "bg-amber-100 text-amber-900 border border-amber-200";
+        case "Completed":
+            return "bg-emerald-100 text-emerald-800 border border-emerald-200";
         case "Upcoming":
             return "bg-sky-100 text-sky-800 border border-sky-200";
         default:
@@ -62,182 +58,158 @@ const statusChip = (status) => {
     }
 };
 
-// زر صغير كبسولات
-const Pill = ({ active, children, onClick, count }) => (
-    <button
-        onClick={onClick}
-        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border transition
-      ${active
-                ? "text-white " + BRAND_GRAD + " shadow-sm"
-                : "bg-white text-gray-700 border-gray-300 hover:bg-amber-50"
-            }`}
-    >
-        <span>{children}</span>
-        {typeof count === "number" && (
-            <span
-                className={`px-1.5 py-0.5 rounded-full text-xs ${active ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"
-                    }`}
-            >
-                {count}
-            </span>
-        )}
-    </button>
+const Stat = ({ label, value }) => (
+    <div className="rounded-xl border border-gray-200 bg-white p-4 text-center">
+        <div className="text-2xl font-extrabold text-gray-900">{value}</div>
+        <div className="text-xs text-gray-600 mt-1">{label}</div>
+    </div>
 );
 
-const ProjectListing = ({ projects, onViewProject }) => {
-    // ------- State -------
-    const [searchTerm, setSearchTerm] = useState("");
-    const [statusFilter, setStatusFilter] = useState("All");
-    const [cityFilter, setCityFilter] = useState("All");
-    const [sortBy, setSortBy] = useState("relevance"); // priceAsc | priceDesc | newest
-    const [currentPage, setCurrentPage] = useState(1);
-    const projectsPerPage = 6;
-
-    // ------- Derived sets -------
-    const normalizedProjects = useMemo(
-        () =>
-            (projects || []).map((p) => ({
-                ...p,
-                _status: normalizeStatus(p.status),
-            })),
+export default function OngoingProjectsPage() {
+    
+    const ongoing = useMemo(
+        () => projects.filter((p) => normalizeStatus(p.status) === "In Progress"),
         [projects]
     );
 
-    const uniqueStatuses = useMemo(() => {
-        const s = new Set(normalizedProjects.map((p) => p._status));
-        // ترتيب مريح
-        const ordered = ["Completed", "In Progress", "Upcoming", "Other"].filter(
-            (t) => s.has(t)
-        );
-        return ["All", ...ordered];
-    }, [normalizedProjects]);
+    // ------- State -------
+    const [searchTerm, setSearchTerm] = useState("");
+    const [cityFilter, setCityFilter] = useState("All");
+    const [sortBy, setSortBy] = useState("relevance"); // priceAsc | priceDesc | newest
+    const [currentPage, setCurrentPage] = useState(1);
+    const perPage = 6;
 
-    const uniqueCities = useMemo(() => {
-        const s = new Set(
-            normalizedProjects
-                .map((p) => p.city)
-                .filter(Boolean)
-                .map((c) => c.trim())
-        );
+    // ------- Derived -------
+    const cities = useMemo(() => {
+        const s = new Set(ongoing.map((p) => p.city).filter(Boolean));
         return ["All", ...Array.from(s)];
-    }, [normalizedProjects]);
+    }, [ongoing]);
 
-    // عدّاد لكل حالة
-    const statusCounts = useMemo(() => {
-        const counts = normalizedProjects.reduce((acc, p) => {
-            acc[p._status] = (acc[p._status] || 0) + 1;
-            return acc;
-        }, {});
-        const all = normalizedProjects.length;
-        return { ...counts, All: all };
-    }, [normalizedProjects]);
-
-    // ------- Filtering -------
-    const filteredProjects = useMemo(() => {
+    const filtered = useMemo(() => {
         const term = searchTerm.toLowerCase().trim();
-        let list = normalizedProjects;
+        let list = ongoing;
 
         if (term) {
             list = list.filter(
                 (p) =>
                     p.name.toLowerCase().includes(term) ||
-                    p.location.toLowerCase().includes(term) ||
+                    (p.location || "").toLowerCase().includes(term) ||
                     (p.city || "").toLowerCase().includes(term) ||
                     (p.unitTypes || []).join(",").toLowerCase().includes(term)
             );
         }
-
-        if (statusFilter !== "All") {
-            list = list.filter((p) => p._status === statusFilter);
-        }
-
         if (cityFilter !== "All") {
             list = list.filter((p) => p.city === cityFilter);
         }
 
-        // ------- Sorting -------
+        // Sort
         list = [...list];
         if (sortBy === "priceAsc") {
             list.sort(
-                (a, b) =>
-                    (a.priceRange?.min ?? 0) - (b.priceRange?.min ?? 0)
+                (a, b) => (a.priceRange?.min ?? 0) - (b.priceRange?.min ?? 0)
             );
         } else if (sortBy === "priceDesc") {
             list.sort(
-                (a, b) =>
-                    (b.priceRange?.min ?? 0) - (a.priceRange?.min ?? 0)
+                (a, b) => (b.priceRange?.min ?? 0) - (a.priceRange?.min ?? 0)
             );
         } else if (sortBy === "newest") {
-            // يتوقع completionDate بصيغة مفهومة Date
             list.sort(
-                (a, b) =>
-                    new Date(b.completionDate) - new Date(a.completionDate)
+                (a, b) => new Date(b.completionDate) - new Date(a.completionDate)
             );
         }
-        // relevance: لا نغيّر الترتيب الأصلي
-
         return list;
-    }, [normalizedProjects, searchTerm, statusFilter, cityFilter, sortBy]);
+    }, [ongoing, searchTerm, cityFilter, sortBy]);
 
-    // ------- Pagination -------
-    const totalPages = Math.max(1, Math.ceil(filteredProjects.length / projectsPerPage));
-    const startIndex = (currentPage - 1) * projectsPerPage;
-    const displayedProjects = filteredProjects.slice(
-        startIndex,
-        startIndex + projectsPerPage
-    );
+    const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+    const start = (currentPage - 1) * perPage;
+    const pageItems = filtered.slice(start, start + perPage);
 
+    useEffect(() => setCurrentPage(1), [searchTerm, cityFilter, sortBy]);
     useEffect(() => {
-        // ارجع لأول صفحة عند تغيير الفلاتر/البحث/الفرز
-        setCurrentPage(1);
-    }, [searchTerm, statusFilter, cityFilter, sortBy]);
-
-    useEffect(() => {
-        // سكرول لأعلى الشبكة عند تغيير الصفحة
         window.scrollTo({ top: 0, behavior: "smooth" });
     }, [currentPage]);
 
-    // ------- Helpers -------
     const clearFilters = () => {
         setSearchTerm("");
-        setStatusFilter("All");
         setCityFilter("All");
         setSortBy("relevance");
         setCurrentPage(1);
     };
 
-    // ------- UI -------
+    // ------- Metrics -------
+    const totalUnits = ongoing.reduce((sum, p) => sum + (p.totalUnits || 0), 0);
+    const availableUnits = ongoing.reduce(
+        (sum, p) => sum + (p.availableUnits || 0),
+        0
+    );
+
     return (
-        <div className="py-16 bg-gradient-to-br from-amber-50 via-white to-white min-h-screen">
+        <div className="min-h-screen py-14 bg-gradient-to-br from-amber-50 via-white to-white">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Header */}
-                <div className="text-center mb-10">
-                    <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-2">
-                        All Projects
+                <header className="mb-8">
+                    <div className="text-xs font-semibold tracking-widest text-[#7c533a] uppercase">
+                        Projects
+                    </div>
+                    <h1 className="mt-2 text-3xl sm:text-4xl font-black text-gray-900">
+                        On-Going Projects
                     </h1>
-                    <p className="text-lg text-gray-600">
-                        Explore our complete portfolio of residential developments
+                    <p className="mt-2 text-gray-600">
+                        Discover our current developments in progress — filtered, sortable,
+                        and always up to date.
                     </p>
+                </header>
+
+                {/* Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+                    <Stat label="Projects In Progress" value={ongoing.length} />
+                    <Stat label="Total Units" value={totalUnits} />
+                    <Stat label="Available Units" value={availableUnits} />
+                    <Stat
+                        label="Avg. Min Price"
+                        value={
+                            ongoing.length
+                                ? `$${Math.round(
+                                    ongoing.reduce((s, p) => s + (p.priceRange?.min ?? 0), 0) /
+                                    ongoing.length
+                                ).toLocaleString()}`
+                                : "—"
+                        }
+                    />
                 </div>
 
                 {/* Filters Card */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
-                    {/* Row 1: Search + Sort + Clear */}
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                         {/* Search */}
                         <div className="md:col-span-6 relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
                             <input
                                 type="text"
-                                placeholder="Search by project, city, or location…"
+                                placeholder="Search by name, city, or location…"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
                             />
                         </div>
 
+                        {/* City */}
+                        <div className="md:col-span-3">
+                            <select
+                                value={cityFilter}
+                                onChange={(e) => setCityFilter(e.target.value)}
+                                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent text-sm"
+                            >
+                                {cities.map((c) => (
+                                    <option key={c} value={c}>
+                                        {c}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
                         {/* Sort */}
-                        <div className="md:col-span-4">
+                        <div className="md:col-span-2">
                             <div className="flex items-center gap-2">
                                 <ArrowUpDown className="h-5 w-5 text-gray-400" />
                                 <select
@@ -254,11 +226,11 @@ const ProjectListing = ({ projects, onViewProject }) => {
                         </div>
 
                         {/* Clear */}
-                        <div className="md:col-span-2">
+                        <div className="md:col-span-1">
                             <button
                                 onClick={clearFilters}
                                 className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm"
-                                title="Clear all filters"
+                                title="Clear filters"
                             >
                                 <X className="h-4 w-4" />
                                 Clear
@@ -266,61 +238,31 @@ const ProjectListing = ({ projects, onViewProject }) => {
                         </div>
                     </div>
 
-                    {/* Row 2: Status Pills + City Select + Count */}
-                    <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-4">
-                        {/* Status pills */}
-                        <div className="lg:col-span-8 flex flex-wrap items-center gap-2">
-                            {uniqueStatuses.map((s) => (
-                                <Pill
-                                    key={s}
-                                    active={statusFilter === s}
-                                    onClick={() => setStatusFilter(s)}
-                                    count={statusCounts[s] ?? 0}
-                                >
-                                    {s}
-                                </Pill>
-                            ))}
-                        </div>
-
-                        {/* City */}
-                        <div className="lg:col-span-3">
-                            <select
-                                value={cityFilter}
-                                onChange={(e) => setCityFilter(e.target.value)}
-                                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent text-sm"
-                            >
-                                {uniqueCities.map((c) => (
-                                    <option key={c} value={c}>
-                                        {c}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Count */}
-                        <div className="lg:col-span-1 flex items-center justify-end text-sm text-gray-600">
-                            <Filter className="h-4 w-4 mr-2 text-gray-400" />
-                            <span>{filteredProjects.length} found</span>
+                    {/* Counter row */}
+                    <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
+                        <div className="flex items-center gap-2">
+                            <Filter className="h-4 w-4 text-gray-400" />
+                            <span>{filtered.length} projects found</span>
                         </div>
                     </div>
                 </div>
 
                 {/* Grid */}
-                {displayedProjects.length > 0 ? (
+                {pageItems.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7 mb-12">
-                        {displayedProjects.map((project) => {
-                            const st = normalizeStatus(project.status);
+                        {pageItems.map((p) => {
+                            const st = "In Progress";
                             return (
                                 <div
-                                    key={project.id}
+                                    key={p.id}
                                     className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden group hover:shadow-md transition-shadow"
                                 >
                                     {/* Image */}
                                     <div className="relative">
                                         <img
+                                            src={p.coverImage}
+                                            alt={p.name}
                                             className="w-full h-64 object-cover group-hover:scale-[1.02] transition-transform duration-300"
-                                            src={project.coverImage}
-                                            alt={project.name}
                                             loading="lazy"
                                         />
                                         <div className="absolute top-4 left-4">
@@ -332,55 +274,63 @@ const ProjectListing = ({ projects, onViewProject }) => {
                                                 {st}
                                             </span>
                                         </div>
-                                        <div className="absolute top-4 right-4">
-                                            <div className="bg-black/60 text-white px-2 py-1 rounded text-xs">
-                                                {project.availableUnits}/{project.totalUnits} Available
-                                            </div>
+                                        <div className="absolute top-4 right-4 bg-black/60 text-white px-2 py-1 rounded text-xs">
+                                            {p.availableUnits}/{p.totalUnits} Available
                                         </div>
                                     </div>
 
                                     {/* Content */}
                                     <div className="p-6">
                                         <h3 className="text-lg font-bold text-gray-900 mb-2">
-                                            {project.name}
+                                            {p.name}
                                         </h3>
 
                                         <div className="space-y-2 mb-4">
                                             <div className="flex items-center text-gray-600">
                                                 <MapPin className="h-4 w-4 mr-2 text-yellow-600" />
                                                 <span className="text-sm">
-                                                    {project.location}
-                                                    {project.city ? ` • ${project.city}` : ""}
+                                                    {p.location}
+                                                    {p.city ? ` • ${p.city}` : ""}
                                                 </span>
                                             </div>
                                             <div className="flex items-center text-gray-600">
                                                 <Building className="h-4 w-4 mr-2 text-yellow-600" />
                                                 <span className="text-sm">
-                                                    {(project.unitTypes || []).join(", ")}
+                                                    {(p.unitTypes || []).join(", ")}
                                                 </span>
                                             </div>
                                             <div className="flex items-center text-gray-600">
                                                 <Calendar className="h-4 w-4 mr-2 text-yellow-600" />
                                                 <span className="text-sm">
-                                                    {project.completionDate || "—"}
+                                                    {p.completionDate || "—"}
                                                 </span>
                                             </div>
                                         </div>
 
                                         <div className="text-xl font-extrabold text-gray-900 mb-4">
-                                            {typeof project.priceRange?.min === "number" &&
-                                                typeof project.priceRange?.max === "number"
-                                                ? `$${project.priceRange.min.toLocaleString()} - $${project.priceRange.max.toLocaleString()}`
+                                            {typeof p.priceRange?.min === "number" &&
+                                                typeof p.priceRange?.max === "number"
+                                                ? `$${p.priceRange.min.toLocaleString()} - $${p.priceRange.max.toLocaleString()}`
                                                 : "Contact for pricing"}
                                         </div>
 
-                                        <button
-                                            onClick={() => onViewProject?.(project.id)}
-                                            className={`w-full ${BRAND_GRAD} text-white px-4 py-2.5 rounded-lg font-semibold hover:opacity-95 transition-colors duration-200 flex items-center justify-center gap-2`}
-                                        >
-                                            <Eye className="h-4 w-4" />
-                                            View Units
-                                        </button>
+                                         {typeof onViewProject === "function" ? (
+                                            <button
+                                                onClick={() => onViewProject(p.id)}
+                                                className={`w-full ${BRAND_GRAD} text-white px-4 py-2.5 rounded-lg font-semibold hover:opacity-95 transition-colors duration-200 flex items-center justify-center gap-2`}
+                                            >
+                                                <Eye className="h-4 w-4" />
+                                                View Details
+                                            </button>
+                                        ) : (
+                                            <RouterLink
+                                                to={`/akdam-construct/project/${p.id}`}
+                                                className={`w-full ${BRAND_GRAD} text-white px-4 py-2.5 rounded-lg font-semibold hover:opacity-95 transition-colors duration-200 flex items-center justify-center gap-2 block text-center`}
+                                            >
+                                                <Eye className="h-4 w-4 inline-block" />
+                                                View Details
+                                            </RouterLink>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -390,13 +340,13 @@ const ProjectListing = ({ projects, onViewProject }) => {
                     // Empty state
                     <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center">
                         <div className="mx-auto w-12 h-12 rounded-xl bg-amber-100 text-amber-800 grid place-items-center mb-4">
-                            <Filter className="w-6 h-6" />
+                            <Layers className="w-6 h-6" />
                         </div>
                         <h3 className="text-xl font-bold text-gray-900 mb-1">
-                            No projects match your filters
+                            No ongoing projects match your filters
                         </h3>
                         <p className="text-gray-600 mb-4">
-                            Try adjusting the search, status, or city filters.
+                            Try adjusting the search or city filter.
                         </p>
                         <button
                             onClick={clearFilters}
@@ -433,7 +383,9 @@ const ProjectListing = ({ projects, onViewProject }) => {
                         ))}
 
                         <button
-                            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                            onClick={() =>
+                                setCurrentPage((p) => Math.min(p + 1, totalPages))
+                            }
                             disabled={currentPage === totalPages}
                             className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -444,6 +396,4 @@ const ProjectListing = ({ projects, onViewProject }) => {
             </div>
         </div>
     );
-};
-
-export default ProjectListing;
+}

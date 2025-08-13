@@ -1,11 +1,24 @@
-import React, { useState } from 'react';
-import { Phone, Mail, MapPin, Send, Clock, MessageSquare } from 'lucide-react';
+import { Clock, Mail, MapPin, MessageSquare, Phone, Send } from 'lucide-react';
+import { useState } from 'react';
+import CitySelect from './CitySelect';
+
+const TURKEY_CITIES = [
+    "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya", "Ankara", "Antalya", "Ardahan", "Artvin",
+    "Aydın", "Balıkesir", "Bartın", "Batman", "Bayburt", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur",
+    "Bursa", "Çanakkale", "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Düzce", "Edirne", "Elazığ", "Erzincan",
+    "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkâri", "Hatay", "Iğdır", "Isparta", "İstanbul",
+    "İzmir", "Kahramanmaraş", "Karabük", "Karaman", "Kars", "Kastamonu", "Kayseri", "Kırıkkale", "Kırklareli", "Kırşehir",
+    "Kilis", "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa", "Mardin", "Mersin", "Muğla", "Muş",
+    "Nevşehir", "Niğde", "Ordu", "Osmaniye", "Rize", "Sakarya", "Samsun", "Siirt", "Sinop", "Sivas",
+    "Şanlıurfa", "Şırnak", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Uşak", "Van", "Yalova", "Yozgat", "Zonguldak"
+];
 
 const ContactUs = () => {
     const [formData, setFormData] = useState({
         name: '',
         email: '',
         phone: '',
+        city: '',              // NEW
         subject: '',
         message: '',
         interestedProject: ''
@@ -19,6 +32,7 @@ const ContactUs = () => {
             name: '',
             email: '',
             phone: '',
+            city: '',           // reset
             subject: '',
             message: '',
             interestedProject: ''
@@ -126,6 +140,7 @@ const ContactUs = () => {
                             <h2 className="text-2xl font-bold text-gray-900 mb-6">Send us a Message</h2>
 
                             <form onSubmit={handleSubmit} className="space-y-6">
+                                {/* Name / Email */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
                                         <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
@@ -160,6 +175,7 @@ const ContactUs = () => {
                                     </div>
                                 </div>
 
+                                {/* Phone / City */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
                                         <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
@@ -178,25 +194,40 @@ const ContactUs = () => {
                                     </div>
 
                                     <div>
-                                        <label htmlFor="interestedProject" className="block text-sm font-medium text-gray-700 mb-2">
-                                            Interested Project
+                                        <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-2">
+                                            City (Turkey) *
                                         </label>
-                                        <select
-                                            id="interestedProject"
-                                            name="interestedProject"
-                                            value={formData.interestedProject}
-                                            onChange={handleChange}
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
-                                        >
-                                            <option value="">Select a project</option>
-                                            <option value="palm-residence">Palm Residence</option>
-                                            <option value="golden-heights">Golden Heights</option>
-                                            <option value="garden-villas">Garden Villas</option>
-                                            <option value="general">General Inquiry</option>
-                                        </select>
+                                        <CitySelect
+                                            value={formData.city}
+                                            onChange={(city) => setFormData(prev => ({ ...prev, city }))}
+                                            options={TURKEY_CITIES}
+                                            required
+                                            name="city"
+                                        />
                                     </div>
                                 </div>
 
+                                {/* Interested Project (full width) */}
+                                <div>
+                                    <label htmlFor="interestedProject" className="block text-sm font-medium text-gray-700 mb-2">
+                                        Interested Project
+                                    </label>
+                                    <select
+                                        id="interestedProject"
+                                        name="interestedProject"
+                                        value={formData.interestedProject}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                                    >
+                                        <option value="">Select a project</option>
+                                        <option value="palm-residence">Palm Residence</option>
+                                        <option value="golden-heights">Golden Heights</option>
+                                        <option value="garden-villas">Garden Villas</option>
+                                        <option value="general">General Inquiry</option>
+                                    </select>
+                                </div>
+
+                                {/* Subject */}
                                 <div>
                                     <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-2">
                                         Subject *
@@ -218,6 +249,7 @@ const ContactUs = () => {
                                     </select>
                                 </div>
 
+                                {/* Message */}
                                 <div>
                                     <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">
                                         Message *
